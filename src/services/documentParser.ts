@@ -213,14 +213,15 @@ export async function parsePdfFileInBrowser(file: File): Promise<PaperDocument> 
     }
   }
 
-  // 动态引入 pdfjs-dist 并优先使用本地离线 worker
+  // 动态引入 pdfjs-dist 并使用包含 toHex Polyfill 的独立 Worker
   const pdfjs = await import('pdfjs-dist')
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
     try {
-      const pdfWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
+      const pdfWorker = await import('./pdf.worker.entry.ts?worker&url')
       pdfjs.GlobalWorkerOptions.workerSrc = (pdfWorker.default || pdfWorker) as string
     } catch {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
+      const fallbackWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
+      pdfjs.GlobalWorkerOptions.workerSrc = (fallbackWorker.default || fallbackWorker) as string
     }
   }
 
