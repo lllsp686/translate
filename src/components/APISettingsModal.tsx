@@ -1,25 +1,28 @@
 import React, { useState, useEffect } from 'react'
-import type { APIConfig, APIProvider } from '../types'
+import type { APIConfig, APIProvider, TranslationTone } from '../types'
 import { APIService, DEFAULT_PROVIDERS } from '../services/apiService'
 import { 
   X, Check, Eye, EyeOff, Activity, Server, Key, Cpu, ShieldCheck, 
-  RotateCcw, AlertCircle, Sparkles
+  RotateCcw, AlertCircle, Sparkles, Feather
 } from 'lucide-react'
 
 interface APISettingsModalProps {
   isOpen: boolean
   onClose: () => void
   onProviderChanged?: (provider: APIProvider) => void
+  onToneChanged?: (tone: TranslationTone) => void
 }
 
 export const APISettingsModal: React.FC<APISettingsModalProps> = ({
   isOpen,
   onClose,
   onProviderChanged,
+  onToneChanged,
 }) => {
   const [configs, setConfigs] = useState<Record<APIProvider, APIConfig>>(() => APIService.getConfigs())
   const [activeProvider, setActiveProvider] = useState<APIProvider>(() => APIService.getActiveProvider())
   const [selectedProvider, setSelectedProvider] = useState<APIProvider>(activeProvider)
+  const [currentTone, setCurrentTone] = useState<TranslationTone>(() => APIService.getTone())
   
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -287,6 +290,66 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
                     placeholder="或直接在此手动输入自定义模型名称"
                     className="w-full rounded-lg border border-black/10 dark:border-white/15 bg-transparent px-3 py-1.5 text-xs font-mono text-neutral-700 dark:text-neutral-300 placeholder-neutral-400 focus:outline-none focus:border-blue-500"
                   />
+                </div>
+              </div>
+
+              {/* 学术翻译语气风格预设 */}
+              <div>
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300">
+                  <Feather className="h-3.5 w-3.5 text-blue-500" />
+                  <span>学术翻译语气风格 (Tone)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTone('fluent')
+                      APIService.setTone('fluent')
+                      onToneChanged?.('fluent')
+                    }}
+                    className={`flex flex-col p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                      currentTone === 'fluent'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
+                        : 'border-black/5 dark:border-white/10 bg-neutral-50/50 dark:bg-neutral-900/40 text-neutral-600 dark:text-neutral-300 hover:border-black/15'
+                    }`}
+                  >
+                    <span className="font-semibold text-[11px]">地道学术中文</span>
+                    <span className="text-[9px] text-neutral-400 mt-0.5">符合国家顶级学报规范</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTone('strict')
+                      APIService.setTone('strict')
+                      onToneChanged?.('strict')
+                    }}
+                    className={`flex flex-col p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                      currentTone === 'strict'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
+                        : 'border-black/5 dark:border-white/10 bg-neutral-50/50 dark:bg-neutral-900/40 text-neutral-600 dark:text-neutral-300 hover:border-black/15'
+                    }`}
+                  >
+                    <span className="font-semibold text-[11px]">严谨直译求实</span>
+                    <span className="text-[9px] text-neutral-400 mt-0.5">适合实验步骤与定理推导</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentTone('simple')
+                      APIService.setTone('simple')
+                      onToneChanged?.('simple')
+                    }}
+                    className={`flex flex-col p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                      currentTone === 'simple'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
+                        : 'border-black/5 dark:border-white/10 bg-neutral-50/50 dark:bg-neutral-900/40 text-neutral-600 dark:text-neutral-300 hover:border-black/15'
+                    }`}
+                  >
+                    <span className="font-semibold text-[11px]">通俗易懂通读</span>
+                    <span className="text-[9px] text-neutral-400 mt-0.5">化简长难句快速泛读</span>
+                  </button>
                 </div>
               </div>
 

@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { APIProvider, PaperDocument, ViewLayoutMode } from './types'
+import type { 
+  APIProvider, PaperDocument, ViewLayoutMode, 
+  HighlightColor, HighlightItem, PaperSummary, ChatMessage 
+} from './types'
 import { APIService } from './services/apiService'
 import { LocalStorageDB } from './services/storageService'
 import { ExportService } from './services/exportService'
@@ -7,6 +10,7 @@ import { parsePdfFileInBrowser, SAMPLE_TRANSFORMER_PAPER } from './services/docu
 import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
 import { SplitReader } from './components/SplitReader'
+import { AICopilotDrawer } from './components/AICopilotDrawer'
 import { APISettingsModal } from './components/APISettingsModal'
 
 export const App: React.FC = () => {
@@ -17,6 +21,8 @@ export const App: React.FC = () => {
   const [activeProvider, setActiveProvider] = useState<APIProvider>(() => APIService.getActiveProvider())
   
   const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>('bilingual-split')
+  const [syncScroll, setSyncScroll] = useState<boolean>(true)
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false)
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
@@ -93,7 +99,6 @@ export const App: React.FC = () => {
           updatedAt: Date.now(),
           blocks: doc.blocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
         }
-        // 自动静默持久化到本地数据库
         LocalStorageDB.saveDocument(updatedDoc)
         return updatedDoc
       })
@@ -218,10 +223,8 @@ export const App: React.FC = () => {
     setIsParsingPdf(true)
     try {
       const parsed = await parsePdfFileInBrowser(file)
-      // 赋予当前选中的分类标签
       parsed.category = selectedCategory === '全部' ? '默认分类' : selectedCategory
       
-      // 持久化保存至本地数据库
       await LocalStorageDB.saveDocument(parsed)
       await LocalStorageDB.setLastActiveDocId(parsed.id)
 
@@ -293,6 +296,75 @@ export const App: React.FC = () => {
     )
   }
 
+  // 划词快捷加入生词/术语库
+  const handleAddToGlossary = (source: string, target: string) => {
+    const currentGlossary = APIService.getGlossary()
+    if (!currentGlossary.some((g) => g.source.toLowerCase() === source.toLowerCase())) {
+      const updated = [
+        ...currentGlossary,
+        { id: Date.now().toString(), source, target, domain: '划词释义' },
+      ]
+      APIService.saveGlossary(updated)
+    }
+  }
+
+  // 添加高亮划线与批注
+  const handleAddHighlight = (blockId: string, text: string, color: HighlightColor, note?: string) => {
+    const newHighlight: HighlightItem = {
+      id: Date.now().toString(),
+      blockId,
+      text,
+      color,
+      note,
+      createdAt: Date.now(),
+    }
+
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.id !== currentDoc.id) return doc
+        const updatedDoc = {
+          ...doc,
+          highlights: [...(doc.highlights || []), newHighlight],
+          updatedAt: Date.now(),
+        }
+        LocalStorageDB.saveDocument(updatedDoc)
+        return updatedDoc
+      })
+    )
+  }
+
+  // 更新论文四维速读
+  const handleUpdateDocumentSummary = (summary: PaperSummary) => {
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.id !== currentDoc.id) return doc
+        const updatedDoc = {
+          ...doc,
+          paperSummary: summary,
+          updatedAt: Date.now(),
+        }
+        LocalStorageDB.saveDocument(updatedDoc)
+        return updatedDoc
+      })
+    )
+  }
+
+  // 更新论文伴读问答历史
+  const handleUpdateChatHistory = (messages: ChatMessage[]) => {
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.id !== currentDoc.id) return doc
+        const updatedDoc = {
+          ...doc,
+          chatHistory: messages,
+          updatedAt: Date.now(),
+        }
+        LocalStorageDB.saveDocument(updatedDoc)
+        return updatedDoc
+      })
+    )
+  }
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#fbfbfd] dark:bg-[#161618] text-neutral-900 dark:text-neutral-100 font-sans">
       {/* 隐藏的 PDF 文件选择器 */}
@@ -314,6 +386,11 @@ export const App: React.FC = () => {
         onStartFullTranslate={handleStartFullTranslate}
         onOpenFilePicker={() => fileInputRef.current?.click()}
         onExportMarkdown={() => ExportService.exportToMarkdown(currentDoc)}
+        onExportHTML={() => ExportService.exportToHTML(currentDoc)}
+        syncScroll={syncScroll}
+        onToggleSyncScroll={() => setSyncScroll(!syncScroll)}
+        isCopilotOpen={isCopilotOpen}
+        onToggleCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
         isTranslating={isTranslating}
         translateProgress={translateProgress}
         darkMode={darkMode}
@@ -321,7 +398,7 @@ export const App: React.FC = () => {
       />
 
       {/* 主阅读视口区域 */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* 左侧抽屉边栏（支持分类管理与持久化文献库） */}
         <Sidebar
           isOpen={sidebarOpen}
@@ -349,8 +426,20 @@ export const App: React.FC = () => {
             onTranslateBlock={handleTranslateBlock}
             activeBlockId={activeBlockId}
             onSetActiveBlockId={setActiveBlockId}
+            syncScroll={syncScroll}
+            onAddToGlossary={handleAddToGlossary}
+            onAddHighlight={handleAddHighlight}
           />
         </main>
+
+        {/* AI 论文伴读与四维速读 Copilot 抽屉 */}
+        <AICopilotDrawer
+          isOpen={isCopilotOpen}
+          onClose={() => setIsCopilotOpen(false)}
+          document={currentDoc}
+          onUpdateDocumentSummary={handleUpdateDocumentSummary}
+          onUpdateChatHistory={handleUpdateChatHistory}
+        />
       </div>
 
       {/* API 偏好设置面板 (Sheet Modal) */}

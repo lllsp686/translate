@@ -55,6 +55,34 @@ export interface DocumentBlock {
   bbox?: [number, number, number, number] // bounding box in page
 }
 
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'purple'
+
+export interface HighlightItem {
+  id: string
+  blockId: string
+  text: string
+  color: HighlightColor
+  note?: string
+  createdAt: number
+}
+
+export interface PaperSummary {
+  contributions: string[]
+  methodology: string
+  results: string
+  limitations: string
+  generatedAt: number
+}
+
+export interface ChatMessage {
+  id: string
+  sender: 'user' | 'ai'
+  content: string
+  timestamp: number
+}
+
+export type TranslationTone = 'strict' | 'fluent' | 'simple'
+
 export interface PaperDocument {
   id: string
   fileName: string
@@ -65,6 +93,9 @@ export interface PaperDocument {
   publishedYear?: string
   blocks: DocumentBlock[]
   category?: string
+  highlights?: HighlightItem[]
+  paperSummary?: PaperSummary
+  chatHistory?: ChatMessage[]
   createdAt: number
   updatedAt: number
 }

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { DocumentBlock, PaperDocument, ViewLayoutMode } from '../types'
+import type { DocumentBlock, HighlightColor, PaperDocument, ViewLayoutMode } from '../types'
 import { MathRenderer } from './MathRenderer'
 import { FigureViewer } from './FigureViewer'
 import { TableViewer } from './TableViewer'
+import { SelectionPopover } from './SelectionPopover'
 import { 
-  Sparkles, RefreshCw, AlertCircle, Copy, Check
+  Sparkles, RefreshCw, AlertCircle, Copy, Check, MessageSquare
 } from 'lucide-react'
 
 interface SplitReaderProps {
@@ -13,6 +14,10 @@ interface SplitReaderProps {
   onTranslateBlock: (blockId: string) => void
   activeBlockId: string | null
   onSetActiveBlockId: (blockId: string | null) => void
+  syncScroll?: boolean
+  onAddToGlossary: (source: string, target: string) => void
+  onAddHighlight: (blockId: string, text: string, color: HighlightColor, note?: string) => void
+  onDeleteHighlight?: (id: string) => void
 }
 
 export const SplitReader: React.FC<SplitReaderProps> = ({
@@ -21,13 +26,23 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
   onTranslateBlock,
   activeBlockId,
   onSetActiveBlockId,
+  syncScroll = true,
+  onAddToGlossary,
+  onAddHighlight,
 }) => {
   const [splitRatio, setSplitRatio] = useState<number>(50) // 50% left, 50% right
   const [isDragging, setIsDragging] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [selectionPopover, setSelectionPopover] = useState<{
+    text: string
+    blockId: string
+    x: number
+    y: number
+  } | null>(null)
 
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const rightPaneRef = useRef<HTMLDivElement>(null)
+  const isSyncingScroll = useRef<boolean>(false)
 
   // 处理拖拽分隔条
   const handleMouseDown = () => {
@@ -58,6 +73,65 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
     }
   }, [isDragging])
 
+  // 双向平滑滚动联动
+  const handleLeftScroll = () => {
+    if (!syncScroll || isSyncingScroll.current) return
+    const left = leftPaneRef.current
+    const right = rightPaneRef.current
+    if (!left || !right) return
+
+    isSyncingScroll.current = true
+    const maxLeft = left.scrollHeight - left.clientHeight
+    const maxRight = right.scrollHeight - right.clientHeight
+    if (maxLeft > 0) {
+      right.scrollTop = (left.scrollTop / maxLeft) * maxRight
+    }
+    setTimeout(() => {
+      isSyncingScroll.current = false
+    }, 40)
+  }
+
+  const handleRightScroll = () => {
+    if (!syncScroll || isSyncingScroll.current) return
+    const left = leftPaneRef.current
+    const right = rightPaneRef.current
+    if (!left || !right) return
+
+    isSyncingScroll.current = true
+    const maxLeft = left.scrollHeight - left.clientHeight
+    const maxRight = right.scrollHeight - right.clientHeight
+    if (maxRight > 0) {
+      left.scrollTop = (right.scrollTop / maxRight) * maxLeft
+    }
+    setTimeout(() => {
+      isSyncingScroll.current = false
+    }, 40)
+  }
+
+  // 监听划词事件
+  const handleMouseUpSelection = (blockId: string) => {
+    setTimeout(() => {
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed) {
+        return
+      }
+
+      const selectedText = selection.toString().trim()
+      if (!selectedText || selectedText.length < 2) {
+        return
+      }
+
+      const range = selection.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      setSelectionPopover({
+        text: selectedText,
+        blockId,
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      })
+    }, 10)
+  }
+
   // 双向滚动联动定位
   const scrollToBlock = (blockId: string, targetPane: 'left' | 'right') => {
     onSetActiveBlockId(blockId)
@@ -73,6 +147,55 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
     navigator.clipboard.writeText(text)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 1500)
+  }
+
+  // 高亮富文本渲染
+  const renderHighlightedText = (blockId: string, text: string) => {
+    const blockHighlights = (document.highlights || []).filter((h) => h.blockId === blockId)
+    if (blockHighlights.length === 0) {
+      return text
+    }
+
+    // 简单高效的多高亮片元替换
+    let fragments: React.ReactNode[] = [text]
+    blockHighlights.forEach((hl) => {
+      const nextFragments: React.ReactNode[] = []
+      fragments.forEach((frag) => {
+        if (typeof frag !== 'string') {
+          nextFragments.push(frag)
+          return
+        }
+
+        const parts = frag.split(hl.text)
+        parts.forEach((part, index) => {
+          if (part) nextFragments.push(part)
+          if (index < parts.length - 1) {
+            let colorCls = 'bg-amber-200/80 dark:bg-amber-500/30'
+            if (hl.color === 'green') colorCls = 'bg-emerald-200/80 dark:bg-emerald-500/30'
+            if (hl.color === 'blue') colorCls = 'bg-sky-200/80 dark:bg-sky-500/30'
+            if (hl.color === 'purple') colorCls = 'bg-rose-200/80 dark:bg-rose-500/30'
+
+            nextFragments.push(
+              <mark
+                key={`${hl.id}-${index}`}
+                className={`${colorCls} rounded-xs px-1 text-inherit cursor-pointer relative group/mark`}
+                title={hl.note ? `批注: ${hl.note}` : '重点标记'}
+              >
+                {hl.text}
+                {hl.note && (
+                  <span className="inline-flex items-center ml-0.5 text-neutral-400 group-hover/mark:text-blue-500">
+                    <MessageSquare className="h-2.5 w-2.5 inline" />
+                  </span>
+                )}
+              </mark>
+            )
+          }
+        })
+      })
+      fragments = nextFragments
+    })
+
+    return <>{fragments}</>
   }
 
   // 渲染单个内容块
@@ -101,104 +224,87 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
 
     // 2. 表格类型 (Table)
     if (block.type === 'table' && block.tableData) {
-      return <TableViewer table={block.tableData} />
+      return (
+        <TableViewer table={block.tableData} />
+      )
     }
 
-    // 3. 独立数学公式
+    // 3. 数学公式类型 (Equation)
     if (block.type === 'equation') {
       return (
-        <div className="my-3 py-2 text-center overflow-x-auto">
-          <MathRenderer content={isOriginal ? block.originalText : (block.translatedText || block.originalText)} />
+        <div className="my-3 flex justify-center overflow-x-auto py-2">
+          <MathRenderer content={block.originalText} />
         </div>
       )
     }
 
-    // 4. 标题与头部
+    // 4. 标题与段落排版
+    const rawText = isOriginal ? block.originalText : block.translatedText || ''
+
     if (block.type === 'title') {
-      const text = isOriginal ? block.originalText : (block.translatedText || block.originalText)
       return (
-        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 mb-3 leading-tight">
-          <MathRenderer content={text} />
+        <h1 className="font-serif text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50 leading-tight">
+          {renderHighlightedText(block.id, rawText)}
         </h1>
       )
     }
 
-    // 5. 作者与单位
-    if (block.type === 'author') {
-      const text = isOriginal ? block.originalText : (block.translatedText || block.originalText)
-      return (
-        <div className="text-xs text-neutral-600 dark:text-neutral-400 mb-4 whitespace-pre-line leading-relaxed">
-          {text}
-        </div>
-      )
-    }
-
-    // 6. 摘要 (Abstract)
-    if (block.type === 'abstract') {
-      const text = isOriginal ? block.originalText : (block.translatedText || block.originalText)
-      return (
-        <div className="my-4 rounded-xl border-l-4 border-blue-500 bg-blue-50/40 dark:bg-blue-950/20 p-3.5 text-xs text-neutral-800 dark:text-neutral-200 leading-relaxed font-sans">
-          <MathRenderer content={text} />
-        </div>
-      )
-    }
-
-    // 7. 小节标题 (Heading)
     if (block.type === 'heading') {
-      const text = isOriginal ? block.originalText : (block.translatedText || block.originalText)
       return (
-        <h3 className="text-sm md:text-base font-bold text-neutral-900 dark:text-neutral-100 mt-5 mb-2 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-          <MathRenderer content={text} />
-        </h3>
+        <h2 className="mt-6 mb-2 font-serif text-lg font-semibold text-neutral-800 dark:text-neutral-100 border-b border-black/5 dark:border-white/5 pb-1">
+          {renderHighlightedText(block.id, rawText)}
+        </h2>
       )
     }
 
-    // 8. 普通段落 (Paragraph)
-    const text = isOriginal ? block.originalText : (block.translatedText || '')
-    if (!isOriginal && !text) {
+    if (block.type === 'abstract') {
       return (
-        <div className="my-2 flex items-center justify-between rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 p-3 text-xs text-neutral-400">
-          <span>该段落尚未翻译</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onTranslateBlock(block.id)
-            }}
-            className="flex items-center gap-1 rounded-md bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 font-medium text-blue-600 dark:text-blue-400 transition-colors cursor-pointer"
-          >
-            <Sparkles className="h-3 w-3" />
-            <span>翻译此段</span>
-          </button>
+        <div className="my-4 rounded-xl border-l-3 border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 p-4 text-xs font-sans leading-relaxed text-neutral-700 dark:text-neutral-300">
+          <div className="mb-1 font-semibold text-blue-600 dark:text-blue-400">
+            {isOriginal ? 'ABSTRACT' : '摘要'}
+          </div>
+          {renderHighlightedText(block.id, rawText)}
         </div>
       )
     }
 
+    // 普通正文段落 (Paragraph)
     return (
-      <div className="text-xs md:text-[13px] leading-relaxed text-neutral-800 dark:text-neutral-200 selectable text-justify">
-        <MathRenderer content={text} />
-      </div>
+      <p className="font-serif text-[14px] leading-relaxed text-neutral-800 dark:text-neutral-200">
+        {renderHighlightedText(block.id, rawText)}
+      </p>
     )
   }
 
-  // 区分单栏/全宽/双栏分组呈现
-  const groupBlocksByPage = () => {
-    const pages: Record<number, DocumentBlock[]> = {}
-    for (const b of document.blocks) {
-      if (!pages[b.pageNumber]) pages[b.pageNumber] = []
-      pages[b.pageNumber].push(b)
-    }
-    return pages
-  }
-
-  const pagesMap = groupBlocksByPage()
+  // 将块按页码分组展示
+  const pagesMap: { [page: number]: DocumentBlock[] } = {}
+  document.blocks.forEach((b) => {
+    if (!pagesMap[b.pageNumber]) pagesMap[b.pageNumber] = []
+    pagesMap[b.pageNumber].push(b)
+  })
 
   return (
-    <div className="relative flex flex-1 h-full w-full overflow-hidden bg-[#fbfbfd] dark:bg-[#161618]">
+    <div 
+      className="relative flex h-full w-full overflow-hidden bg-white dark:bg-[#1e1e20]"
+      onClick={() => setSelectionPopover(null)}
+    >
+      {/* 划词悬浮翻译卡片 */}
+      {selectionPopover && (
+        <SelectionPopover
+          text={selectionPopover.text}
+          blockId={selectionPopover.blockId}
+          position={{ x: selectionPopover.x, y: selectionPopover.y }}
+          onClose={() => setSelectionPopover(null)}
+          onAddToGlossary={onAddToGlossary}
+          onAddHighlight={onAddHighlight}
+        />
+      )}
+
       {/* 左栏：原文阅读区 */}
       {layoutMode !== 'translation-only' && (
         <div
           ref={leftPaneRef}
+          onScroll={handleLeftScroll}
           style={{
             width: layoutMode === 'original-only' ? '100%' : `${splitRatio}%`,
           }}
@@ -206,7 +312,7 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
         >
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="mb-4 flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 text-xs text-neutral-400">
-              <span className="font-semibold uppercase tracking-wider">English Source (原文排版)</span>
+              <span className="font-semibold uppercase tracking-wider">English Source (英文原文)</span>
               <span>{document.blocks.length} 块元素</span>
             </div>
 
@@ -225,6 +331,7 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
                       key={block.id}
                       data-block-id={block.id}
                       onClick={() => scrollToBlock(block.id, 'right')}
+                      onMouseUp={() => handleMouseUpSelection(block.id)}
                       className={`group relative rounded-xl p-3 transition-all cursor-pointer ${
                         isActive
                           ? 'bg-blue-500/8 ring-2 ring-blue-500/40 shadow-xs'
@@ -241,7 +348,7 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
         </div>
       )}
 
-      {/* 中间拖拽分隔线 (仅在双栏分屏模式下出现) */}
+      {/* 中间拖拽分隔线 */}
       {layoutMode === 'bilingual-split' && (
         <div
           onMouseDown={handleMouseDown}
@@ -257,19 +364,16 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
       {layoutMode !== 'original-only' && (
         <div
           ref={rightPaneRef}
+          onScroll={handleRightScroll}
           style={{
             width: layoutMode === 'translation-only' ? '100%' : `${100 - splitRatio}%`,
           }}
-          className="h-full overflow-y-auto px-6 py-8 transition-colors select-text bg-white/60 dark:bg-[#1a1a1d]/60 backdrop-blur-xs"
+          className="h-full overflow-y-auto px-6 py-8 transition-colors select-text"
         >
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="mb-4 flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2 text-xs text-neutral-400">
-              <span className="font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Chinese Translation (学术精排译文)
-              </span>
-              <span className="text-[11px]">
-                {document.blocks.filter((b) => b.status === 'completed').length} / {document.blocks.length} 已译
-              </span>
+              <span className="font-semibold uppercase tracking-wider">Chinese Translation (学术译文)</span>
+              <span className="text-[11px] text-blue-500">双栏对齐高保真排版</span>
             </div>
 
             {Object.entries(pagesMap).map(([pageNum, pBlocks]) => (
@@ -282,62 +386,88 @@ export const SplitReader: React.FC<SplitReaderProps> = ({
 
                 {pBlocks.map((block) => {
                   const isActive = activeBlockId === block.id
+                  const isCompleted = block.status === 'completed'
                   const isTranslating = block.status === 'translating'
+                  const isError = block.status === 'error'
 
                   return (
                     <div
                       key={block.id}
                       data-block-id={block.id}
                       onClick={() => scrollToBlock(block.id, 'left')}
+                      onMouseUp={() => handleMouseUpSelection(block.id)}
                       className={`group relative rounded-xl p-3 transition-all cursor-pointer ${
                         isActive
                           ? 'bg-blue-500/8 ring-2 ring-blue-500/40 shadow-xs'
                           : 'hover:bg-black/3 dark:hover:bg-white/3'
-                      } ${isTranslating ? 'animate-pulse bg-blue-500/5' : ''}`}
+                      }`}
                     >
-                      {/* 右上角快捷操作条 */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-10">
-                        {block.translatedText && (
+                      {/* 状态动作栏 */}
+                      <div className="absolute right-2 top-2 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isCompleted && block.translatedText && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleCopyText(block.id, block.translatedText || '')
+                              handleCopyText(block.id, block.translatedText!)
                             }}
-                            className="rounded-md bg-white dark:bg-neutral-800 p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 shadow-xs"
+                            className="rounded-md bg-white dark:bg-neutral-800 p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 shadow-xs border border-black/5 dark:border-white/10"
                             title="复制译文"
                           >
-                            {copiedId === block.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                            {copiedId === block.id ? (
+                              <Check className="h-3 w-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
                           </button>
                         )}
+
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             onTranslateBlock(block.id)
                           }}
                           disabled={isTranslating}
-                          className="rounded-md bg-white dark:bg-neutral-800 p-1 text-neutral-400 hover:text-blue-500 shadow-xs"
-                          title="重新翻译此段"
+                          className="rounded-md bg-white dark:bg-neutral-800 p-1 text-neutral-400 hover:text-blue-500 shadow-xs border border-black/5 dark:border-white/10"
+                          title={isCompleted ? '重新翻译' : '翻译此块'}
                         >
-                          <RefreshCw className={`h-3 w-3 ${isTranslating ? 'animate-spin text-blue-500' : ''}`} />
+                          {isTranslating ? (
+                            <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
                         </button>
                       </div>
 
-                      {/* 块状态指示器 */}
-                      {isTranslating && (
-                        <div className="mb-2 flex items-center gap-1.5 text-xs text-blue-500 font-medium">
-                          <span className="h-2 w-2 rounded-full bg-blue-500 animate-ping" />
-                          <span>正在学术精准翻译...</span>
+                      {/* 内容展示 */}
+                      {isTranslating ? (
+                        <div className="flex items-center gap-2 py-4 text-xs text-blue-500 animate-pulse">
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>正在学术精译此段内容...</span>
+                        </div>
+                      ) : isError ? (
+                        <div className="flex items-center justify-between rounded-lg bg-rose-50 dark:bg-rose-950/20 p-2 text-xs text-rose-600">
+                          <div className="flex items-center gap-1.5">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span>{block.errorMessage || '翻译请求发生异常'}</span>
+                          </div>
+                          <button
+                            onClick={() => onTranslateBlock(block.id)}
+                            className="text-xs font-medium underline"
+                          >
+                            重试
+                          </button>
+                        </div>
+                      ) : isCompleted ? (
+                        renderBlockContent(block, false)
+                      ) : (
+                        <div
+                          onClick={() => onTranslateBlock(block.id)}
+                          className="flex items-center justify-center rounded-lg border border-dashed border-neutral-300 dark:border-neutral-700 py-4 text-xs text-neutral-400 hover:border-blue-400 hover:text-blue-500 transition-colors"
+                        >
+                          <Sparkles className="mr-1 h-3.5 w-3.5" />
+                          <span>点击翻译此段学术内容</span>
                         </div>
                       )}
-
-                      {block.status === 'error' && (
-                        <div className="mb-2 flex items-center gap-1 text-xs text-red-500">
-                          <AlertCircle className="h-3 w-3" />
-                          <span>翻译失败：{block.errorMessage || '网络或API异常'}</span>
-                        </div>
-                      )}
-
-                      {renderBlockContent(block, false)}
                     </div>
                   )
                 })}
