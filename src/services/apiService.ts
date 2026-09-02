@@ -267,10 +267,10 @@ export class APIService {
   /**
    * 官方 API 账户余额与额度实时查询
    */
-  static async checkBalance(provider: APIProvider): Promise<BalanceInfo> {
-    const config = this.getConfigs()[provider]
+  static async checkBalance(provider: APIProvider, overrideConfig?: APIConfig): Promise<BalanceInfo> {
+    const config = overrideConfig || this.getConfigs()[provider]
     if (!config || (!config.apiKey && provider !== 'custom')) {
-      return { supported: false, error: '请先填写该模型厂商的 API Key' }
+      return { supported: false, error: `请先在上方输入 ${config?.name?.split(' ')[0] || provider} 的 API Key` }
     }
 
     // 1. DeepSeek 官方余额端点查询
@@ -315,15 +315,22 @@ export class APIService {
           return { supported: true, error: `查询失败 (${res.status}): ${err}` }
         }
         const data = await res.json()
+        if (data.error) {
+          return { supported: true, error: data.error.message || '查询失败' }
+        }
         if (data.data) {
+          const avail = data.data.available_balance !== undefined 
+            ? data.data.available_balance 
+            : (Number(data.data.cash_balance || 0) + Number(data.data.voucher_balance || 0))
           return {
             supported: true,
-            totalBalance: Number(data.data.available_balance || 0).toFixed(2),
+            totalBalance: Number(avail).toFixed(2),
             currency: '¥',
             grantedBalance: Number(data.data.voucher_balance || 0).toFixed(2),
             toppedUpBalance: Number(data.data.cash_balance || 0).toFixed(2),
           }
         }
+        return { supported: true, error: data.message || '未获取到 Kimi 账户数据' }
       } catch (err: any) {
         return { supported: true, error: err.message || '查询 Kimi 余额网络异常' }
       }

@@ -67,7 +67,7 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
   const handleCheckBalance = async () => {
     setCheckingBalance(true)
     setBalanceResult(null)
-    const res = await APIService.checkBalance(selectedProvider)
+    const res = await APIService.checkBalance(selectedProvider, currentConfig)
     setCheckingBalance(false)
     setBalanceResult(res)
   }
@@ -130,6 +130,7 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
                     onClick={() => {
                       setSelectedProvider(item.id)
                       setTestResult(null)
+                      setBalanceResult(null)
                     }}
                     className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-all ${
                       isSelected
@@ -402,7 +403,7 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
                     ) : balanceResult.supported && balanceResult.totalBalance !== undefined ? (
                       <div className="space-y-1">
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-neutral-500 text-[11px]">当前账户总余额:</span>
+                          <span className="text-neutral-500 text-[11px]">【{currentConfig.name.split(' ')[0]}】当前账户总余额:</span>
                           <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                             {balanceResult.currency} {balanceResult.totalBalance}
                           </span>
