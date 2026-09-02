@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Native macOS academic paper translation assistant with Apple Silicon M-series support",
   "author": "PaperLens Contributors",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -75,6 +76,11 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
     ]
   }
 }

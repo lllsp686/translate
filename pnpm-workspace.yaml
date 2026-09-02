@@ -1,2 +1,5 @@
 allowBuilds:
-  tesseract.js: set this to true or false
+  electron: true
+  tesseract.js: true
+onlyBuiltDependencies:
+  - electron
