@@ -51,33 +51,33 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   const currentConfig = configs[activeProvider]
 
   return (
-    <header className="relative flex h-12 w-full items-center justify-between border-b border-black/8 dark:border-white/10 bg-white/80 dark:bg-[#202023]/80 backdrop-blur-xl px-4 select-none z-30 transition-colors">
-      {/* 左侧：macOS 红黄绿灯 + 打开文件 */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-full bg-[#ff5f56] border border-[#e0443e]/40 shadow-xs cursor-pointer hover:opacity-80 transition-opacity" />
-          <div className="h-3 w-3 rounded-full bg-[#ffbd2e] border border-[#dea123]/40 shadow-xs cursor-pointer hover:opacity-80 transition-opacity" />
-          <div className="h-3 w-3 rounded-full bg-[#27c93f] border border-[#1aab29]/40 shadow-xs cursor-pointer hover:opacity-80 transition-opacity" />
-        </div>
+    <header 
+      className="relative flex h-12 w-full items-center justify-between border-b border-black/8 dark:border-white/10 bg-white/80 dark:bg-[#202023]/80 backdrop-blur-xl px-4 select-none z-30 transition-colors"
+      style={{ WebkitAppRegion: 'drag' } as any}
+    >
+      {/* 左侧：macOS 原生红黄绿灯留白区 + 打开文件 */}
+      <div className="flex items-center gap-2">
+        {/* 留出 72px 给 macOS 系统原生交通灯按钮，彻底解决重影与点击无效 */}
+        <div className="w-[72px] shrink-0" />
 
-        <div className="h-4 w-[1px] bg-black/10 dark:bg-white/10 mx-1" />
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button
+            onClick={onOpenFilePicker}
+            className="flex items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-2.5 py-1 text-xs font-medium text-neutral-700 dark:text-neutral-200 transition-all cursor-pointer"
+            title="打开本地 PDF 文献"
+          >
+            <FileUp className="h-3.5 w-3.5 text-blue-500" />
+            <span>导入 PDF</span>
+          </button>
 
-        <button
-          onClick={onOpenFilePicker}
-          className="flex items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-2.5 py-1 text-xs font-medium text-neutral-700 dark:text-neutral-200 transition-all cursor-pointer"
-          title="打开本地 PDF 文献"
-        >
-          <FileUp className="h-3.5 w-3.5 text-blue-500" />
-          <span>导入 PDF</span>
-        </button>
-
-        <div className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300 font-medium truncate max-w-[180px] xl:max-w-[280px]">
-          <span className="truncate">{documentTitle}</span>
+          <div className="flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300 font-medium truncate max-w-[180px] xl:max-w-[280px]">
+            <span className="truncate">{documentTitle}</span>
+          </div>
         </div>
       </div>
 
       {/* 中间：视图布局切换 & 联动滚动开关 */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
         {/* 阅读布局 Pill */}
         <div className="inline-flex rounded-lg bg-black/5 dark:bg-white/10 p-0.5 text-xs">
           <button
@@ -136,7 +136,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       </div>
 
       {/* 右侧：AI伴读 + 导出 + 模型 + 全文翻译 + 设置 */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
         {/* AI 伴读助手开关按钮 */}
         <button
           onClick={onToggleCopilot}
