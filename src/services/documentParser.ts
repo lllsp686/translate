@@ -203,11 +203,25 @@ function multiplyTransform(m1: number[], m2: number[]): number[] {
  */
 export async function parsePdfFileInBrowser(file: File): Promise<PaperDocument> {
   const arrayBuffer = await file.arrayBuffer()
-  
-  // 动态引入 pdfjs-dist
+
+  // 确保 Uint8Array.prototype.toHex 兼容性 polyfill（防止 pdfjs-dist 最新草案函数报错）
+  if (!('toHex' in Uint8Array.prototype)) {
+    ;(Uint8Array.prototype as any).toHex = function () {
+      return Array.from(this)
+        .map((b: any) => b.toString(16).padStart(2, '0'))
+        .join('')
+    }
+  }
+
+  // 动态引入 pdfjs-dist 并优先使用本地离线 worker
   const pdfjs = await import('pdfjs-dist')
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
+    try {
+      const pdfWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
+      pdfjs.GlobalWorkerOptions.workerSrc = (pdfWorker.default || pdfWorker) as string
+    } catch {
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
+    }
   }
 
   const loadingTask = pdfjs.getDocument({ data: arrayBuffer })
