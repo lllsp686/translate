@@ -2,7 +2,7 @@ import type { APIProvider, ViewLayoutMode } from '../types'
 import { APIService } from '../services/apiService'
 import { 
   Columns, FileText, Settings, Play, Sparkles, 
-  Moon, Sun, FileUp
+  Moon, Sun, FileUp, Download
 } from 'lucide-react'
 
 interface TitleBarProps {
@@ -13,6 +13,7 @@ interface TitleBarProps {
   onOpenSettings: () => void
   onStartFullTranslate: () => void
   onOpenFilePicker: () => void
+  onExportMarkdown?: () => void
   isTranslating: boolean
   translateProgress: { completed: number; total: number }
   darkMode: boolean
@@ -27,6 +28,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onOpenSettings,
   onStartFullTranslate,
   onOpenFilePicker,
+  onExportMarkdown,
   isTranslating,
   translateProgress,
   darkMode,
@@ -116,6 +118,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <span className="font-medium">{currentConfig?.name?.split(' ')[0] || 'DeepSeek'}</span>
           <span className="text-[10px] text-neutral-400">({currentConfig?.model})</span>
         </button>
+
+        {/* 导出双语笔记 */}
+        {onExportMarkdown && (
+          <button
+            onClick={onExportMarkdown}
+            className="flex items-center gap-1.5 rounded-lg border border-black/8 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-2.5 py-1 text-xs text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+            title="导出双语精读笔记 (Markdown 格式，保留数学公式与排版)"
+          >
+            <Download className="h-3.5 w-3.5 text-blue-500" />
+            <span>导出笔记</span>
+          </button>
+        )}
 
         {/* 全文翻译按钮 */}
         <button

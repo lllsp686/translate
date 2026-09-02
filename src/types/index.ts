@@ -64,6 +64,7 @@ export interface PaperDocument {
   authors?: string[]
   publishedYear?: string
   blocks: DocumentBlock[]
+  category?: string
   createdAt: number
   updatedAt: number
 }

@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import type { APIProvider, PaperDocument, ViewLayoutMode } from './types'
 import { APIService } from './services/apiService'
+import { LocalStorageDB } from './services/storageService'
+import { ExportService } from './services/exportService'
 import { parsePdfFileInBrowser, SAMPLE_TRANSFORMER_PAPER } from './services/documentParser'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
@@ -10,6 +12,8 @@ import { APISettingsModal } from './components/APISettingsModal'
 export const App: React.FC = () => {
   const [documents, setDocuments] = useState<PaperDocument[]>([SAMPLE_TRANSFORMER_PAPER])
   const [currentDocId, setCurrentDocId] = useState<string>(SAMPLE_TRANSFORMER_PAPER.id)
+  const [categories, setCategories] = useState<string[]>(['默认分类', '精读文献', '综述论文', '实验参考'])
+  const [selectedCategory, setSelectedCategory] = useState<string>('全部')
   const [activeProvider, setActiveProvider] = useState<APIProvider>(() => APIService.getActiveProvider())
   
   const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>('bilingual-split')
@@ -29,6 +33,39 @@ export const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 1. 初始化从 IndexedDB 加载历史文献与分类配置
+  useEffect(() => {
+    const initStorage = async () => {
+      try {
+        const [storedDocs, storedCategories, lastDocId] = await Promise.all([
+          LocalStorageDB.getAllDocuments(),
+          LocalStorageDB.getCategories(),
+          LocalStorageDB.getLastActiveDocId(),
+        ])
+
+        if (storedCategories && storedCategories.length > 0) {
+          setCategories(storedCategories)
+        }
+
+        if (storedDocs && storedDocs.length > 0) {
+          setDocuments(storedDocs)
+          if (lastDocId && storedDocs.some((d) => d.id === lastDocId)) {
+            setCurrentDocId(lastDocId)
+          } else {
+            setCurrentDocId(storedDocs[0].id)
+          }
+        } else {
+          // 首次使用持久化保存示例论文
+          await LocalStorageDB.saveDocument(SAMPLE_TRANSFORMER_PAPER)
+        }
+      } catch (err) {
+        console.warn('Init local storage error:', err)
+      }
+    }
+
+    initStorage()
+  }, [])
+
   // 同步 dark 模式到 HTML 根标签
   useEffect(() => {
     if (darkMode) {
@@ -38,20 +75,29 @@ export const App: React.FC = () => {
     }
   }, [darkMode])
 
-  const currentDoc = documents.find((d) => d.id === currentDocId) || documents[0]
+  const currentDoc = documents.find((d) => d.id === currentDocId) || documents[0] || SAMPLE_TRANSFORMER_PAPER
 
-  // 更新当前文档的某个块
+  // 选择文献
+  const handleSelectDoc = (id: string) => {
+    setCurrentDocId(id)
+    LocalStorageDB.setLastActiveDocId(id)
+  }
+
+  // 更新当前文档的某个块并持久化同步至 IndexedDB
   const updateBlock = (blockId: string, updates: Partial<(typeof currentDoc.blocks)[0]>) => {
-    setDocuments((prevDocs) =>
-      prevDocs.map((doc) => {
+    setDocuments((prevDocs) => {
+      return prevDocs.map((doc) => {
         if (doc.id !== currentDoc.id) return doc
-        return {
+        const updatedDoc = {
           ...doc,
           updatedAt: Date.now(),
           blocks: doc.blocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
         }
+        // 自动静默持久化到本地数据库
+        LocalStorageDB.saveDocument(updatedDoc)
+        return updatedDoc
       })
-    )
+    })
   }
 
   // 单块翻译
@@ -96,14 +142,13 @@ export const App: React.FC = () => {
             return Promise.all(
               row.map(async (cell) => {
                 if (cell.translated) return cell
-                if (!cell.original.trim() || /^[\d\.\,\%\-\+\s]+$/.test(cell.original)) {
+                if (!cell.original.trim() || /^[\d\.\,\%\+\-\=]+$/.test(cell.original)) {
                   return { ...cell, translated: cell.original }
                 }
                 try {
                   const trans = await APIService.translateText({
                     text: cell.original,
                     config,
-                    systemPrompt: 'Translate this table header/cell to Chinese. Keep numbers and formulas intact. Return only the translation.',
                   })
                   return { ...cell, translated: trans }
                 } catch {
@@ -124,7 +169,7 @@ export const App: React.FC = () => {
           },
         })
       } else {
-        // 普通段落/公式/标题
+        // 文本、段落、标题等翻译
         const trans = await APIService.translateText({
           text: block.originalText,
           config,
@@ -165,7 +210,7 @@ export const App: React.FC = () => {
 
   const [isParsingPdf, setIsParsingPdf] = useState<boolean>(false)
 
-  // 本地 PDF 导入处理
+  // 本地 PDF 导入处理（导入后自动持久化到本地 IndexedDB）
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -173,16 +218,79 @@ export const App: React.FC = () => {
     setIsParsingPdf(true)
     try {
       const parsed = await parsePdfFileInBrowser(file)
-      const figureCount = parsed.blocks.filter((b) => b.type === 'figure').length
+      // 赋予当前选中的分类标签
+      parsed.category = selectedCategory === '全部' ? '默认分类' : selectedCategory
+      
+      // 持久化保存至本地数据库
+      await LocalStorageDB.saveDocument(parsed)
+      await LocalStorageDB.setLastActiveDocId(parsed.id)
+
       setDocuments((prev) => [parsed, ...prev])
       setCurrentDocId(parsed.id)
-      console.log(`[GreenWhale] 文献解析完成，共提取 ${parsed.blocks.length} 块内容，其中图表数: ${figureCount}`)
+      console.log(`[PaperLens] 文献解析完成并已持久化保存，共提取 ${parsed.blocks.length} 块内容`)
     } catch (err: any) {
       alert(`解析 PDF 失败: ${err.message || '未知错误'}`)
     } finally {
       setIsParsingPdf(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  // 删除单篇文献
+  const handleDeleteDoc = async (id: string) => {
+    await LocalStorageDB.deleteDocument(id)
+    setDocuments((prev) => {
+      const filtered = prev.filter((d) => d.id !== id)
+      if (currentDocId === id && filtered.length > 0) {
+        setCurrentDocId(filtered[0].id)
+        LocalStorageDB.setLastActiveDocId(filtered[0].id)
+      }
+      return filtered
+    })
+  }
+
+  // 新增分类
+  const handleAddCategory = async (catName: string) => {
+    if (categories.includes(catName)) return
+    const updated = [...categories, catName]
+    setCategories(updated)
+    await LocalStorageDB.saveCategories(updated)
+  }
+
+  // 删除分类
+  const handleDeleteCategory = async (catName: string) => {
+    const updated = categories.filter((c) => c !== catName)
+    setCategories(updated)
+    await LocalStorageDB.saveCategories(updated)
+    if (selectedCategory === catName) {
+      setSelectedCategory('全部')
+    }
+
+    // 该分类下的文献重置为默认分类
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.category === catName) {
+          const mod = { ...doc, category: '默认分类', updatedAt: Date.now() }
+          LocalStorageDB.saveDocument(mod)
+          return mod
+        }
+        return doc
+      })
+    )
+  }
+
+  // 修改文献所属分类
+  const handleChangeDocCategory = async (docId: string, newCategory: string) => {
+    setDocuments((prev) =>
+      prev.map((doc) => {
+        if (doc.id === docId) {
+          const mod = { ...doc, category: newCategory, updatedAt: Date.now() }
+          LocalStorageDB.saveDocument(mod)
+          return mod
+        }
+        return doc
+      })
+    )
   }
 
   return (
@@ -205,6 +313,7 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onStartFullTranslate={handleStartFullTranslate}
         onOpenFilePicker={() => fileInputRef.current?.click()}
+        onExportMarkdown={() => ExportService.exportToMarkdown(currentDoc)}
         isTranslating={isTranslating}
         translateProgress={translateProgress}
         darkMode={darkMode}
@@ -213,16 +322,23 @@ export const App: React.FC = () => {
 
       {/* 主阅读视口区域 */}
       <div className="flex flex-1 overflow-hidden">
-        {/* 左侧抽屉边栏 */}
+        {/* 左侧抽屉边栏（支持分类管理与持久化文献库） */}
         <Sidebar
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           documents={documents}
           currentDocId={currentDoc.id}
-          onSelectDoc={setCurrentDocId}
+          onSelectDoc={handleSelectDoc}
           onImportFile={() => fileInputRef.current?.click()}
           onOpenSettings={() => setIsSettingsOpen(true)}
           activeProvider={activeProvider}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+          onAddCategory={handleAddCategory}
+          onDeleteCategory={handleDeleteCategory}
+          onChangeDocCategory={handleChangeDocCategory}
+          onDeleteDoc={handleDeleteDoc}
         />
 
         {/* 双栏对照高保真阅读器 */}
