@@ -49,24 +49,27 @@
   - 支持一键开启/关闭左右视口联动对齐，阅读长文时自动按比例跟随同步定位。
 - 🎛️ **学术翻译语气风格预设**：
   - 提供“地道学术中文（学报标准）”、“严谨直译求实（实验推导）”、“通俗易懂通读（快速泛读）”三种专业风格自由切换。
+- 💰 **API 账户额度与实时余额查询**：
+  - 设置面板支持直连 DeepSeek / Kimi / 聚合服务商官方余额接口，一键实时查询账户可用总额、充值余额与赠送代金券；
+  - 本地实时精确记录翻译字符数、预估消耗 Token 数量与调用频次。
 
 ---
 
-## 🛠️ 支持的模型配置指南
+## 🛠️ 支持的模型配置指南 (2025-2026 最新模型矩阵)
 
 在软件右上角点击 **设置 (⚙️)**，选择对应厂商并填入您的 API Key 即可使用：
 
-| 模型厂商 | 推荐默认模型 | 官方 API Key 申请地址 |
+| 模型厂商 | 推荐最新模型 | 官方 API Key 申请地址 |
 | :--- | :--- | :--- |
-| **DeepSeek** | `deepseek-chat` / `deepseek-reasoner` | [DeepSeek Platform](https://platform.deepseek.com) |
-| **Kimi (Moonshot)** | `moonshot-v1-8k` / `moonshot-v1-32k` | [Moonshot AI 开放平台](https://platform.moonshot.cn) |
-| **小米 MiMo** | `mimo-v1` | [小米开放平台](https://dev.mi.com) |
-| **智谱 GLM** | `glm-4-flash` / `glm-4` | [智谱开放平台](https://open.bigmodel.cn) |
-| **阿里通义千问 (Qwen)** | `qwen-plus` / `qwen-turbo` | [阿里云百炼平台](https://bailian.console.aliyun.com) |
-| **OpenAI** | `gpt-4o` / `gpt-4o-mini` | [OpenAI Platform](https://platform.openai.com) |
-| **Claude** | `claude-3-5-sonnet-20241022` | [Anthropic Console](https://console.anthropic.com) |
-| **Google Gemini** | `gemini-1.5-flash` / `gemini-2.0-flash` | [Google AI Studio](https://aistudio.google.com) |
-| **自定义端点** | 自定义兼容模型 | 任何兼容 OpenAI `v1/chat/completions` 的服务商 |
+| **DeepSeek** | `deepseek-chat` / `deepseek-v4` / `deepseek-reasoner` / `deepseek-r1` | [DeepSeek Platform](https://platform.deepseek.com) |
+| **Kimi (Moonshot)** | `moonshot-v1-auto` / `moonshot-v1-32k` / `kimi-k2` | [Moonshot AI 开放平台](https://platform.moonshot.cn) |
+| **小米 MiMo / MiniMax** | `mimo-v1` / `abab7-chat` / `MiniMax-Text-01` | [小米开放平台](https://dev.mi.com) |
+| **智谱 GLM** | `glm-4-plus` / `glm-4-air` / `glm-4-flash` / `glm-zero-preview` | [智谱开放平台](https://open.bigmodel.cn) |
+| **阿里通义千问 (Qwen)** | `qwen-plus` / `qwen-max` / `qwen2.5-72b-instruct` | [阿里云百炼平台](https://bailian.console.aliyun.com) |
+| **OpenAI** | `gpt-4o` / `gpt-4o-mini` / `o3-mini` / `gpt-4.5-preview` | [OpenAI Platform](https://platform.openai.com) |
+| **Claude** | `claude-3-7-sonnet-20250219` / `claude-3-5-sonnet-latest` | [Anthropic Console](https://console.anthropic.com) |
+| **Google Gemini** | `gemini-2.0-flash` / `gemini-2.0-pro-exp-02-05` | [Google AI Studio](https://aistudio.google.com) |
+| **自定义端点** | 自定义兼容模型 (如 `deepseek-v4`, `llama3.3`) | 任何兼容 OpenAI `v1/chat/completions` 的第三方或自建服务商 |
 
 ---
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import type { APIConfig, APIProvider, TranslationTone } from '../types'
+import type { APIConfig, APIProvider, TranslationTone, BalanceInfo, UsageStats } from '../types'
 import { APIService, DEFAULT_PROVIDERS } from '../services/apiService'
 import { 
   X, Check, Eye, EyeOff, Activity, Server, Key, Cpu, ShieldCheck, 
-  RotateCcw, AlertCircle, Sparkles, Feather
+  RotateCcw, AlertCircle, Sparkles, Feather, Wallet, RefreshCw, Trash2
 } from 'lucide-react'
 
 interface APISettingsModalProps {
@@ -28,6 +28,10 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; latencyMs?: number; error?: string } | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  const [checkingBalance, setCheckingBalance] = useState(false)
+  const [balanceResult, setBalanceResult] = useState<BalanceInfo | null>(null)
+  const [usageStats, setUsageStats] = useState<UsageStats>(() => APIService.getUsageStats())
 
   useEffect(() => {
     if (isOpen) {
@@ -58,6 +62,21 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
     const res = await APIService.testConnection(selectedProvider)
     setTesting(false)
     setTestResult(res)
+  }
+
+  const handleCheckBalance = async () => {
+    setCheckingBalance(true)
+    setBalanceResult(null)
+    const res = await APIService.checkBalance(selectedProvider)
+    setCheckingBalance(false)
+    setBalanceResult(res)
+  }
+
+  const handleResetUsage = () => {
+    if (confirm('确定要重置本地累计消耗统计吗？')) {
+      APIService.resetUsageStats()
+      setUsageStats({ totalChars: 0, totalTokens: 0, requestsCount: 0 })
+    }
   }
 
   const handleSetAsActive = () => {
@@ -350,6 +369,93 @@ export const APISettingsModal: React.FC<APISettingsModalProps> = ({
                     <span className="font-semibold text-[11px]">通俗易懂通读</span>
                     <span className="text-[9px] text-neutral-400 mt-0.5">化简长难句快速泛读</span>
                   </button>
+                </div>
+              </div>
+
+              {/* API 额度与余额查询 + 本地使用消耗统计 */}
+              <div className="rounded-2xl border border-black/8 dark:border-white/10 bg-neutral-50/60 dark:bg-neutral-900/50 p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                    <Wallet className="h-4 w-4 text-emerald-500" />
+                    <span>API 账户额度与使用统计</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={checkingBalance}
+                    onClick={handleCheckBalance}
+                    className="flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/15 bg-white dark:bg-neutral-800 px-2.5 py-1 text-[11px] font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all cursor-pointer disabled:opacity-50"
+                    title="向官方接口实时查询账户当前剩余额度与充值金额"
+                  >
+                    <RefreshCw className={`h-3 w-3 text-blue-500 ${checkingBalance ? 'animate-spin' : ''}`} />
+                    <span>{checkingBalance ? '查询中...' : '实时查询余额'}</span>
+                  </button>
+                </div>
+
+                {/* 余额查询结果展示 */}
+                {balanceResult && (
+                  <div className="rounded-xl border border-black/5 dark:border-white/10 bg-white/80 dark:bg-neutral-800/80 p-3 text-xs animate-in fade-in">
+                    {balanceResult.error ? (
+                      <div className="flex items-center gap-1.5 text-rose-500">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>{balanceResult.error}</span>
+                      </div>
+                    ) : balanceResult.supported && balanceResult.totalBalance !== undefined ? (
+                      <div className="space-y-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-neutral-500 text-[11px]">当前账户总余额:</span>
+                          <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            {balanceResult.currency} {balanceResult.totalBalance}
+                          </span>
+                        </div>
+                        {(balanceResult.grantedBalance || balanceResult.toppedUpBalance) && (
+                          <div className="flex items-center gap-3 text-[11px] text-neutral-400">
+                            {balanceResult.toppedUpBalance && (
+                              <span>充值余额: {balanceResult.currency}{balanceResult.toppedUpBalance}</span>
+                            )}
+                            {balanceResult.grantedBalance && (
+                              <span>赠送额度: {balanceResult.currency}{balanceResult.grantedBalance}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-neutral-500 text-[11px] leading-relaxed">
+                        {balanceResult.rawMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 本地累计用量统计卡片 */}
+                <div className="grid grid-cols-3 gap-2 text-center pt-1 border-t border-black/5 dark:border-white/5">
+                  <div className="rounded-xl bg-black/3 dark:bg-white/5 p-2">
+                    <div className="text-[10px] text-neutral-400">累计翻译字符</div>
+                    <div className="text-xs font-bold text-neutral-800 dark:text-neutral-200 mt-0.5 font-mono">
+                      {usageStats.totalChars.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-black/3 dark:bg-white/5 p-2">
+                    <div className="text-[10px] text-neutral-400">预估消耗 Token</div>
+                    <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
+                      ~{usageStats.totalTokens.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-black/3 dark:bg-white/5 p-2 relative group">
+                    <div className="text-[10px] text-neutral-400">翻译调用次数</div>
+                    <div className="text-xs font-bold text-neutral-800 dark:text-neutral-200 mt-0.5 font-mono">
+                      {usageStats.requestsCount} 次
+                    </div>
+                    {usageStats.requestsCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleResetUsage}
+                        className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-500 p-0.5 transition-opacity"
+                        title="清空统计"
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -134,3 +134,19 @@ export interface GlossaryItem {
   target: string
   domain: string
 }
+
+export interface BalanceInfo {
+  supported: boolean
+  totalBalance?: string
+  currency?: string
+  grantedBalance?: string
+  toppedUpBalance?: string
+  rawMessage?: string
+  error?: string
+}
+
+export interface UsageStats {
+  totalChars: number
+  totalTokens: number
+  requestsCount: number
+}

@@ -1,14 +1,17 @@
-import type { APIConfig, APIProvider, GlossaryItem, TranslationTone, PaperDocument, PaperSummary, ChatMessage } from '../types'
+import type { 
+  APIConfig, APIProvider, GlossaryItem, TranslationTone, 
+  PaperDocument, PaperSummary, ChatMessage, BalanceInfo, UsageStats 
+} from '../types'
 
 export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
   deepseek: {
     provider: 'deepseek',
-    name: 'DeepSeek (深度求索)',
+    name: 'DeepSeek (深度求索 V4/V3/R1)',
     apiKey: '',
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
     enabled: true,
-    availableModels: ['deepseek-chat', 'deepseek-reasoner'],
+    availableModels: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4', 'deepseek-r1'],
     supportsStreaming: true,
   },
   kimi: {
@@ -18,17 +21,17 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     baseUrl: 'https://api.moonshot.cn/v1',
     model: 'moonshot-v1-32k',
     enabled: true,
-    availableModels: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2'],
+    availableModels: ['moonshot-v1-auto', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2', 'moonshot-v1-8k'],
     supportsStreaming: true,
   },
   mimo: {
     provider: 'mimo',
-    name: '小米 MiMo (Xiaomi)',
+    name: '小米 MiMo (Xiaomi / MiniMax)',
     apiKey: '',
     baseUrl: 'https://api.mimo.xiaomi.com/v1',
     model: 'mimo-v1',
     enabled: true,
-    availableModels: ['mimo-v1', 'mimo-v1-lite'],
+    availableModels: ['mimo-v1', 'mimo-v1-pro', 'abab7-chat', 'MiniMax-Text-01'],
     supportsStreaming: true,
   },
   glm: {
@@ -38,7 +41,7 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-plus',
     enabled: true,
-    availableModels: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
+    availableModels: ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-long', 'glm-zero-preview'],
     supportsStreaming: true,
   },
   qwen: {
@@ -48,7 +51,7 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen-plus',
     enabled: true,
-    availableModels: ['qwen-plus', 'qwen-max', 'qwen-turbo'],
+    availableModels: ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen-long', 'qwen2.5-72b-instruct'],
     supportsStreaming: true,
   },
   openai: {
@@ -58,7 +61,7 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
     enabled: true,
-    availableModels: ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
+    availableModels: ['gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o1', 'gpt-4.5-preview'],
     supportsStreaming: true,
   },
   claude: {
@@ -66,9 +69,9 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     name: 'Anthropic Claude',
     apiKey: '',
     baseUrl: 'https://api.anthropic.com/v1',
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-3-7-sonnet-20250219',
     enabled: true,
-    availableModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    availableModels: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest'],
     supportsStreaming: true,
   },
   gemini: {
@@ -76,19 +79,19 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
     name: 'Google Gemini',
     apiKey: '',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    model: 'gemini-1.5-pro',
+    model: 'gemini-2.0-flash',
     enabled: true,
-    availableModels: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash'],
+    availableModels: ['gemini-2.0-flash', 'gemini-2.0-pro-exp-02-05', 'gemini-1.5-pro', 'gemini-1.5-flash'],
     supportsStreaming: true,
   },
   custom: {
     provider: 'custom',
-    name: '自定义 OpenAI 兼容协议 (本地/中转)',
+    name: '自定义 OpenAI 兼容协议 (本地/中转/NewAPI)',
     apiKey: '',
     baseUrl: 'http://localhost:11434/v1',
     model: 'llama3.1',
     enabled: false,
-    availableModels: ['llama3.1', 'deepseek-r1:8b', 'qwen2.5:7b', 'custom-model'],
+    availableModels: ['llama3.1', 'deepseek-v4', 'deepseek-r1:8b', 'qwen2.5:72b', 'custom-model'],
     supportsStreaming: true,
   },
 }
@@ -96,6 +99,7 @@ export const DEFAULT_PROVIDERS: Record<APIProvider, APIConfig> = {
 const STORAGE_KEY_CONFIGS = 'greenwhale_api_configs'
 const STORAGE_KEY_ACTIVE = 'greenwhale_active_provider'
 const STORAGE_KEY_GLOSSARY = 'greenwhale_glossary'
+const STORAGE_KEY_USAGE = 'paperlens_usage_stats'
 
 export class APIService {
   static getConfigs(): Record<APIProvider, APIConfig> {
@@ -103,7 +107,21 @@ export class APIService {
       const stored = localStorage.getItem(STORAGE_KEY_CONFIGS)
       if (stored) {
         const parsed = JSON.parse(stored)
-        return { ...DEFAULT_PROVIDERS, ...parsed }
+        const merged: Record<APIProvider, APIConfig> = { ...DEFAULT_PROVIDERS }
+        for (const key of Object.keys(DEFAULT_PROVIDERS) as APIProvider[]) {
+          if (parsed[key]) {
+            merged[key] = {
+              ...DEFAULT_PROVIDERS[key],
+              ...parsed[key],
+              name: DEFAULT_PROVIDERS[key].name,
+              availableModels: Array.from(new Set([
+                ...DEFAULT_PROVIDERS[key].availableModels,
+                ...(parsed[key].availableModels || []),
+              ])),
+            }
+          }
+        }
+        return merged
       }
     } catch (e) {
       console.error('Failed to load API configs from localStorage', e)
@@ -224,6 +242,130 @@ export class APIService {
   }
 
   /**
+   * 本地翻译消耗用量统计
+   */
+  static getUsageStats(): UsageStats {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_USAGE)
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return { totalChars: 0, totalTokens: 0, requestsCount: 0 }
+  }
+
+  static recordUsage(charCount: number): void {
+    const stats = this.getUsageStats()
+    stats.totalChars += charCount
+    stats.totalTokens += Math.ceil(charCount / 1.6)
+    stats.requestsCount += 1
+    localStorage.setItem(STORAGE_KEY_USAGE, JSON.stringify(stats))
+  }
+
+  static resetUsageStats(): void {
+    localStorage.removeItem(STORAGE_KEY_USAGE)
+  }
+
+  /**
+   * 官方 API 账户余额与额度实时查询
+   */
+  static async checkBalance(provider: APIProvider): Promise<BalanceInfo> {
+    const config = this.getConfigs()[provider]
+    if (!config || (!config.apiKey && provider !== 'custom')) {
+      return { supported: false, error: '请先填写该模型厂商的 API Key' }
+    }
+
+    // 1. DeepSeek 官方余额端点查询
+    if (provider === 'deepseek') {
+      try {
+        const res = await fetch('https://api.deepseek.com/user/balance', {
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+          },
+        })
+        if (!res.ok) {
+          const err = await res.text()
+          return { supported: true, error: `查询失败 (${res.status}): ${err}` }
+        }
+        const data = await res.json()
+        if (data.is_available && data.balance_infos && data.balance_infos.length > 0) {
+          const info = data.balance_infos[0]
+          return {
+            supported: true,
+            totalBalance: info.total_balance,
+            currency: info.currency === 'CNY' ? '¥' : '$',
+            grantedBalance: info.granted_balance,
+            toppedUpBalance: info.topped_up_balance,
+          }
+        }
+        return { supported: true, totalBalance: '0.00', currency: '¥' }
+      } catch (err: any) {
+        return { supported: true, error: err.message || '查询 DeepSeek 余额网络异常' }
+      }
+    }
+
+    // 2. Kimi (Moonshot) 官方余额端点查询
+    if (provider === 'kimi') {
+      try {
+        const res = await fetch('https://api.moonshot.cn/v1/users/me/balance', {
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+          },
+        })
+        if (!res.ok) {
+          const err = await res.text()
+          return { supported: true, error: `查询失败 (${res.status}): ${err}` }
+        }
+        const data = await res.json()
+        if (data.data) {
+          return {
+            supported: true,
+            totalBalance: Number(data.data.available_balance || 0).toFixed(2),
+            currency: '¥',
+            grantedBalance: Number(data.data.voucher_balance || 0).toFixed(2),
+            toppedUpBalance: Number(data.data.cash_balance || 0).toFixed(2),
+          }
+        }
+      } catch (err: any) {
+        return { supported: true, error: err.message || '查询 Kimi 余额网络异常' }
+      }
+    }
+
+    // 3. 通用第三方 / OneAPI / NewAPI / OpenAI 聚合服务商端点自动嗅探
+    try {
+      const baseUrl = config.baseUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '')
+      const probeEndpoints = [
+        `${baseUrl}/api/user/self`,
+        `${baseUrl}/dashboard/billing/credit_grants`,
+        `${baseUrl}/v1/dashboard/billing/subscription`,
+      ]
+      for (const endpoint of probeEndpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            headers: { Authorization: `Bearer ${config.apiKey}` },
+          })
+          if (res.ok) {
+            const json = await res.json()
+            if (json.data && typeof json.data.quota === 'number') {
+              // OneAPI / NewAPI 汇率换算: 500,000 = $1.00
+              const balance = (json.data.quota / 500000).toFixed(2)
+              return { supported: true, totalBalance: balance, currency: '$' }
+            }
+            if (typeof json.total_available === 'number') {
+              return { supported: true, totalBalance: json.total_available.toFixed(2), currency: '$' }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    } catch {}
+
+    return {
+      supported: false,
+      rawMessage: '该厂商未开放免验证码的公开余额查询接口，请直接登录官网控制台；下方已为您实时精确统计本地实际翻译消耗。',
+    }
+  }
+
+  /**
    * 翻译单段或图表/表格文本
    */
   static async translateText({
@@ -276,7 +418,8 @@ ${toneGuide}
       rawTranslation = await this.callOpenAICompatible(activeConfig, finalSystemPrompt, sanitizedText)
     }
 
-    // 4. 公式还原
+    // 4. 公式还原与用量统计
+    this.recordUsage(text.length)
     return this.restoreMathFormulas(rawTranslation.trim(), placeholders)
   }
 
