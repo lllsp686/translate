@@ -204,25 +204,11 @@ function multiplyTransform(m1: number[], m2: number[]): number[] {
 export async function parsePdfFileInBrowser(file: File): Promise<PaperDocument> {
   const arrayBuffer = await file.arrayBuffer()
 
-  // 确保 Uint8Array.prototype.toHex 兼容性 polyfill（防止 pdfjs-dist 最新草案函数报错）
-  if (!('toHex' in Uint8Array.prototype)) {
-    ;(Uint8Array.prototype as any).toHex = function () {
-      return Array.from(this)
-        .map((b: any) => b.toString(16).padStart(2, '0'))
-        .join('')
-    }
-  }
-
-  // 动态引入 pdfjs-dist 并使用包含 toHex Polyfill 的独立 Worker
-  const pdfjs = await import('pdfjs-dist')
+  // 采用官方包含全套标准兼容垫片（toHex, Map.getOrInsertComputed 等）的 legacy 稳定构建
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-    try {
-      const pdfWorker = await import('./pdf.worker.entry.ts?worker&url')
-      pdfjs.GlobalWorkerOptions.workerSrc = (pdfWorker.default || pdfWorker) as string
-    } catch {
-      const fallbackWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
-      pdfjs.GlobalWorkerOptions.workerSrc = (fallbackWorker.default || fallbackWorker) as string
-    }
+    const pdfWorker = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')
+    pdfjs.GlobalWorkerOptions.workerSrc = (pdfWorker.default || pdfWorker) as string
   }
 
   const loadingTask = pdfjs.getDocument({ data: arrayBuffer })
